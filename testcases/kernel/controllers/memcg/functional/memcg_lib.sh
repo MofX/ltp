@@ -124,6 +124,7 @@ signal_memcg_process()
 	local usage_start=$(cat ${path}memory.usage_in_bytes)
 
 	kill -s USR1 $pid 2> /dev/null
+	TST_CHECKPOINT_WAIT 1
 
 	if [ -z "$size" ]; then
 		return

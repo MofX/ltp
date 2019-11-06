@@ -24,7 +24,8 @@
 static int fd;
 
 static volatile int flag_exit;
-static volatile int flag_allocated;
+static volatile int flag_do_work;
+static int flag_allocated;
 
 static int opt_mmap_anon;
 static int opt_mmap_file;
@@ -257,22 +258,7 @@ static void sigint_handler(int __attribute__ ((unused)) signo)
  */
 static void sigusr_handler(int __attribute__ ((unused)) signo)
 {
-	if (opt_mmap_anon)
-		mmap_anon();
-
-	if (opt_mmap_file)
-		mmap_file();
-
-	if (opt_mmap_lock1)
-		mmap_lock1();
-
-	if (opt_mmap_lock2)
-		mmap_lock2();
-
-	if (opt_shm)
-		shm();
-
-	flag_allocated = !flag_allocated;
+	flag_do_work++;
 }
 
 int main(int argc, char *argv[])
@@ -302,8 +288,30 @@ int main(int argc, char *argv[])
 
 	TST_CHECKPOINT_WAKE(0);
 
-	while (!flag_exit)
+	while (!flag_exit) {
+		if (flag_do_work) {
+			flag_do_work--;
+			if (opt_mmap_anon)
+				mmap_anon();
+
+			if (opt_mmap_file)
+				mmap_file();
+
+			if (opt_mmap_lock1)
+				mmap_lock1();
+
+			if (opt_mmap_lock2)
+				mmap_lock2();
+
+			if (opt_shm)
+				shm();
+
+			flag_allocated = !flag_allocated;
+
+			TST_CHECKPOINT_WAKE(1);
+		}
 		sleep(1);
+	}
 
 	close(fd);
 
