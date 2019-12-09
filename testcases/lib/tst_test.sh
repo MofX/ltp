@@ -577,7 +577,7 @@ tst_run()
 			IPV6|IPV6_FLAG|IPVER|TEST_DATA|TEST_DATA_IFS);;
 			RETRY_FUNC|RETRY_FN_EXP_BACKOFF|TIMEOUT);;
 			NET_DATAROOT|NET_MAX_PKT|NET_RHOST_RUN_DEBUG|NETLOAD_CLN_NUMBER);;
-			NET_SKIP_VARIABLE_INIT);;
+			NET_SKIP_VARIABLE_INIT|NEEDS_FIFO);;
 			*) tst_res TWARN "Reserved variable TST_$_tst_i used!";;
 			esac
 		done
@@ -636,6 +636,8 @@ tst_run()
 
 		cd "$TST_TMPDIR"
 	fi
+
+	[ "$TST_NEEDS_FIFO" = 1 ] && . tst_fifo.sh
 
 	TST_MNTPOINT="${TST_MNTPOINT:-mntpoint}"
 	if [ "$TST_NEEDS_DEVICE" = 1 ]; then
