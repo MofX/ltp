@@ -1,8 +1,25 @@
 Linux Test Project
 ==================
-    test
-    abc
-    asdasd
+    library process
+    +----------------------------+
+    | main                       |
+    |  tst_run_tcases            |
+    |   do_setup                 |
+    |   for_each_variant         |
+    |    for_each_filesystem     |   test process
+    |     fork_testrun ------------->+--------------------------------------------+
+    |      waitpid               |   | testrun                                    |
+    |                            |   |  do_test_setup                             |
+    |                            |   |   tst_test->setup                          |
+    |                            |   |  run_tests                                 |
+    |                            |   |   tst_test->test(i) or tst_test->test_all  |
+    |                            |   |  do_test_cleanup                           |
+    |                            |   |   tst_test->cleanup                        |
+    |                            |   |  exit(0)                                   |
+    |   do_exit                  |   +--------------------------------------------+
+    |    do_cleanup              |
+    |     exit(ret)              |
+    +----------------------------+
     
 Linux Test Project is a joint project started by SGI, OSDL and Bull developed
 and maintained by IBM, Cisco, Fujitsu, SUSE, Red Hat, Oracle and others. The
