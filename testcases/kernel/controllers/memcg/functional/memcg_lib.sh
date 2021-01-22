@@ -14,10 +14,12 @@ TST_CLEANUP=memcg_cleanup
 TST_SETUP=memcg_setup
 TST_TESTFUNC=memcg_testfunc
 
+FIFO_NAME="memcg_comm"
 MEMCG_SHMMAX=${MEMCG_SHMMAX:-0}
 MEMCG_TESTFUNC=${MEMCG_TESTFUNC:-memcg_no_testfunc}
 
 . cgroup_lib.sh
+. tst_fifo.sh
 
 PAGESIZE=$(tst_getconf PAGESIZE)
 if [ $? -ne 0 ]; then
@@ -91,6 +93,8 @@ memcg_setup()
 	fi
 
 	[ "$MEMCG_SHMMAX" = "1" ] && shmmax_setup
+
+	export LTP_FIFO_PATH="$TST_TMPDIR"
 }
 
 memcg_cleanup()
@@ -160,10 +164,11 @@ check_mem_stat()
 
 start_memcg_process()
 {
+	tst_fifo_recreate $FIFO_NAME
 	tst_res TINFO "Running memcg_process $@"
 	memcg_process "$@" &
 	MEMCG_PROCESS_PID=$!
-	ROD tst_checkpoint wait 10000 0
+	tst_fifo_send $FIFO_NAME START 100
 }
 
 signal_memcg_process()
@@ -172,7 +177,7 @@ signal_memcg_process()
 	local path=$2
 	local usage_start=$(cat ${path}memory.usage_in_bytes)
 
-	kill -s USR1 $MEMCG_PROCESS_PID 2> /dev/null
+	tst_fifo_send $FIFO_NAME GO 100
 
 	if [ -z "$size" ]; then
 		return
@@ -201,7 +206,7 @@ signal_memcg_process()
 stop_memcg_process()
 {
 	[ -z "$MEMCG_PROCESS_PID" ] && return
-	kill -s INT $MEMCG_PROCESS_PID 2> /dev/null
+	tst_fifo_send $FIFO_NAME STOP 100
 	wait $MEMCG_PROCESS_PID
 	MEMCG_PROCESS_PID=
 }

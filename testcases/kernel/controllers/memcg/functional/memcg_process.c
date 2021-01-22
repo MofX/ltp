@@ -20,11 +20,11 @@
 #include <unistd.h>
 #define TST_NO_DEFAULT_MAIN
 #include "tst_test.h"
+#include "tst_fifo.h"
 
 static int fd;
 
-static volatile int flag_exit;
-static volatile int flag_allocated;
+static int flag_allocated;
 
 static int opt_mmap_anon;
 static int opt_mmap_file;
@@ -36,14 +36,15 @@ static int opt_hugepage;
 static int key_id;			/* used with opt_shm */
 static unsigned long memsize;
 
-#define FILE_HUGEPAGE	"/hugetlb/hugepagefile"
+static const char FIFO_NAME[] = "memcg_comm";
+static const char FILE_HUGEPAGE[] = "/hugetlb/hugepagefile";
 
-#define MMAP_ANON	(SCHAR_MAX + 1)
-#define MMAP_FILE	(SCHAR_MAX + 2)
-#define MMAP_LOCK1	(SCHAR_MAX + 3)
-#define MMAP_LOCK2	(SCHAR_MAX + 4)
-#define SHM		(SCHAR_MAX + 5)
-#define HUGEPAGE	(SCHAR_MAX + 6)
+#define MMAP_ANON   (SCHAR_MAX + 1)
+#define MMAP_FILE   (SCHAR_MAX + 2)
+#define MMAP_LOCK1  (SCHAR_MAX + 3)
+#define MMAP_LOCK2  (SCHAR_MAX + 4)
+#define SHM		    (SCHAR_MAX + 5)
+#define HUGEPAGE    (SCHAR_MAX + 6)
 
 static const struct option long_opts[] = {
 	{"mmap-anon", 0, NULL, MMAP_ANON},
@@ -108,8 +109,9 @@ static void touch_memory(char *p, int size)
 	int i;
 	int pagesize = getpagesize();
 
-	for (i = 0; i < size; i += pagesize)
+	for (i = 0; i < size; i += pagesize) {
 		p[i] = 0xef;
+	}
 }
 
 static void mmap_anon(void)
@@ -238,24 +240,7 @@ static void shm(void)
 	}
 }
 
-/*
- * sigint_handler: handle SIGINT by set the exit flag.
- */
-static void sigint_handler(int __attribute__ ((unused)) signo)
-{
-	flag_exit = 1;
-}
-
-/*
- * sigusr_handler: handler SIGUSR
- *
- * When we receive SIGUSR, we allocate some memory according
- * to the user input when the process started.
- *
- * When we receive SIGUSR again, we will free all the allocated
- * memory.
- */
-static void sigusr_handler(int __attribute__ ((unused)) signo)
+static void do_mem(void)
 {
 	if (opt_mmap_anon)
 		mmap_anon();
@@ -277,33 +262,34 @@ static void sigusr_handler(int __attribute__ ((unused)) signo)
 
 int main(int argc, char *argv[])
 {
-	struct sigaction sigint_action;
-	struct sigaction sigusr_action;
+	int ret;
+	char data[6];
 
 	if ((fd = open("/dev/zero", O_RDWR)) == -1)
 		err(1, "open /dev/zero failed");
 
-	memset(&sigint_action, 0, sizeof(sigint_action));
-	memset(&sigusr_action, 0, sizeof(sigusr_action));
-
-	sigemptyset(&sigint_action.sa_mask);
-	sigint_action.sa_handler = &sigint_handler;
-	if (sigaction(SIGINT, &sigint_action, NULL))
-		err(1, "sigaction(SIGINT)");
-
-	sigemptyset(&sigusr_action.sa_mask);
-	sigusr_action.sa_handler = &sigusr_handler;
-	if (sigaction(SIGUSR1, &sigusr_action, NULL))
-		err(1, "sigaction(SIGUSR1)");
+	tst_fifo_init();
 
 	process_options(argc, argv);
 
-	tst_reinit();
+	ret = tst_fifo_receive(FIFO_NAME, data, sizeof(data), 0);
+	if (ret == -1)
+		err(1, "tst_fifo_receive() failed");
+	if (strcmp(data, "START") != 0)
+		err(1, "Did not receive START");
 
-	TST_CHECKPOINT_WAKE(0);
-
-	while (!flag_exit)
-		sleep(1);
+	while (1) {
+		ret = tst_fifo_receive(FIFO_NAME, data, sizeof(data), 0);
+		if (ret == -1)
+			err(1, "tst_fifo_receive() failed");
+		if (strcmp(data, "GO") == 0) {
+			do_mem();
+		} else if (strcmp(data, "STOP") == 0) {
+			break;
+		} else {
+			err(1, "Unknown command received");
+		}
+	}
 
 	close(fd);
 
